@@ -22,7 +22,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011, 2018 by Delphix. All rights reserved.
- * Copyright (c) 2015, Nexenta Systems, Inc.  All rights reserved.
+ * Copyright (c) 2018, Nexenta Systems, Inc.  All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  * Copyright 2013 Saso Kiselkov. All rights reserved.
  * Copyright (c) 2014 Integros [integros.com]
@@ -6440,6 +6440,18 @@ spa_vdev_split_mirror(spa_t *spa, char *newname, nvlist_t *config,
 		dmu_tx_abort(tx);
 	for (c = 0; c < children; c++) {
 		if (vml[c] != NULL) {
+			vdev_t *tvd = vml[c]->vdev_top;
+
+			/*
+			 * Need to be sure the detachable VDEV is not
+			 * on any *other* txg's DTL list to prevent it
+			 * from being accessed after it's freed.
+			 */
+			for (int t = 0; t < TXG_SIZE; t++) {
+				(void) txg_list_remove_this(
+				    &tvd->vdev_dtl_list, vml[c], t);
+			}
+
 			vdev_split(vml[c]);
 			if (error == 0)
 				spa_history_log_internal(spa, "detach", tx,
